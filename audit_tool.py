@@ -6,7 +6,8 @@ import os
 import subprocess
 
 score = 0
-total_checks = 7
+max_score = 15
+total_checks = 10
 report = []
 
 GREEN = "\033[92m"
@@ -36,7 +37,7 @@ def check_firewall():
     result = run_command("ufw status")
     if "Status: active" in result:
         report.append(GREEN + "[PASS] Firewall is active" + END)
-        score += 1
+        score += 2
     else:
         report.append(RED + "[FAIL] Firewall is not active" + END)
         report.append(YELLOW + "  → Recommendation: Enable firewall using 'sudo ufw enable'" + END)
@@ -47,7 +48,7 @@ def check_ssh_root():
         data = f.read()
         if "PermitRootLogin no" in data:
             report.append(GREEN + "[PASS] Root login disabled" + END)
-            score += 1
+            score += 3
         else:
             report.append(RED + "[FAIL] Root login enabled" + END)
             report.append(YELLOW + "  → Recommendation: Set 'PermitRootLogin no' in /etc/ssh/sshd_config" + END)
@@ -58,7 +59,7 @@ def check_ssh_password():
         data = f.read()
         if "PasswordAuthentication no" in data:
             report.append(GREEN + "[PASS] Password authentication disabled" + END)
-            score += 1
+            score += 2
         else:
             report.append(YELLOW + "[WARN] Password authentication enabled" + END)
             report.append(YELLOW + "  → Recommendation: Set 'PasswordAuthentication no' and use SSH keys" + END)
@@ -81,6 +82,33 @@ def check_services():
         report.append(GREEN + "[PASS] No insecure services detected" + END)
         score += 1
 
+def check_password_policy():
+    global score
+    try:
+        with open("/etc/login.defs", "r") as f:
+            data = f.read()
+
+        if "PASS_MIN_LEN" in data:
+            report.append(GREEN + "[PASS] Password policy defined" + END)
+            score += 1
+        else:
+            report.append(YELLOW + "[WARN] Weak password policy" + END)
+            report.append(YELLOW + "  → Recommendation: Configure PASS_MIN_LEN in /etc/login.defs" + END)
+
+    except:
+        report.append(RED + "[FAIL] Could not read password policy file" + END)
+
+def check_fail2ban():
+    global score
+    result = run_command("systemctl is-active fail2ban")
+
+    if "active" in result:
+        report.append(GREEN + "[PASS] Fail2Ban is active" + END)
+        score += 1
+    else:
+        report.append(YELLOW + "[WARN] Fail2Ban not active" + END)
+        report.append(YELLOW + "  → Recommendation: Enable using 'sudo systemctl enable fail2ban'" + END)
+
 def check_rootkit():
     global score
     result = run_command("chkrootkit")
@@ -88,6 +116,25 @@ def check_rootkit():
         report.append(RED + "[FAIL] Rootkit detected" + END)
     else:
         report.append(GREEN + "[PASS] No rootkit detected" + END)
+        score += 1
+
+def check_open_ports():
+    global score
+    result = run_command("ss -tuln")
+
+    risky_ports = ["21", "23", "25", "3306"]  # FTP, Telnet, SMTP, MySQL
+
+    found_risky = False
+
+    for port in risky_ports:
+        if f":{port}" in result:
+            found_risky = True
+
+    if found_risky:
+        report.append(YELLOW + "[WARN] Potentially risky ports open" + END)
+        report.append(YELLOW + "  → Recommendation: Review open ports using 'ss -tulnp'" + END)
+    else:
+        report.append(GREEN + "[PASS] No risky ports detected" + END)
         score += 1
 
 def check_updates():
