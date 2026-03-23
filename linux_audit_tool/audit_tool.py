@@ -6,7 +6,7 @@ import os
 import subprocess
 
 score = 0
-max_score = 15
+max_score = 10
 total_checks = 10
 report = []
 
@@ -154,8 +154,11 @@ check_shadow_permissions()
 check_services()
 check_rootkit()
 check_updates()
+check_open_ports()
+check_fail2ban()
+check_password_policy()
 
-final_score = (score / total_checks) * 100
+final_score = (score / max_score) * 100
 
 print("\n===== Linux Hardening Audit Report =====\n")
 
