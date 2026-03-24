@@ -27,3 +27,5 @@ _trial_temp
 .pydevproject
 .idea/
 .tox
+GeoLite2-City.mmdb
+
