@@ -1,3 +1,4 @@
+import argparse
 import platform
 import datetime
 import socket
@@ -10,10 +11,26 @@ max_score = 10
 total_checks = 10
 report = []
 
+cis_map = {
+    "firewall": "CIS 3.5",
+    "ssh_root": "CIS 5.2.8",
+    "ssh_password": "CIS 5.2.9",
+    "permissions": "CIS 6.1",
+    "fail2ban": "CIS 5.2"
+}
+
 GREEN = "\033[92m"
 RED = "\033[91m"
 YELLOW = "\033[93m"
 END = "\033[0m"
+
+parser = argparse.ArgumentParser(description="Linux Hardening Audit Tool")
+
+parser.add_argument("--quick", action="store_true", help="Run quick scan")
+parser.add_argument("--full", action="store_true", help="Run full scan")
+parser.add_argument("--export", choices=["json", "html", "all"], help="Export report format")
+
+args = parser.parse_args()
 
 def run_command(cmd):
     try:
@@ -36,7 +53,7 @@ def check_firewall():
     global score
     result = run_command("ufw status")
     if "Status: active" in result:
-        report.append(GREEN + "[PASS] Firewall is active" + END)
+        report.append(GREEN + f"[PASS] Firewall is active ({cis_map['firewall']})" + END)
         score += 2
     else:
         report.append(RED + "[FAIL] Firewall is not active" + END)
@@ -47,7 +64,7 @@ def check_ssh_root():
     with open("/etc/ssh/sshd_config", "r") as f:
         data = f.read()
         if "PermitRootLogin no" in data:
-            report.append(GREEN + "[PASS] Root login disabled" + END)
+            report.append(GREEN + f"[PASS] Root login disabled ({cis_map['ssh_root']})" + END)
             score += 3
         else:
             report.append(RED + "[FAIL] Root login enabled" + END)
@@ -58,7 +75,7 @@ def check_ssh_password():
     with open("/etc/ssh/sshd_config", "r") as f:
         data = f.read()
         if "PasswordAuthentication no" in data:
-            report.append(GREEN + "[PASS] Password authentication disabled" + END)
+            report.append(GREEN + f"[PASS] Password authentication disabled ({cis_map['ssh_password']})" + END)
             score += 2
         else:
             report.append(YELLOW + "[WARN] Password authentication enabled" + END)
@@ -68,7 +85,7 @@ def check_shadow_permissions():
     global score
     perm = oct(os.stat("/etc/shadow").st_mode)[-3:]
     if perm in ["600", "640"]:
-        report.append(GREEN + "[PASS] /etc/shadow permissions secure" + END)
+        report.append(GREEN + f"[PASS] /etc/shadow permissions secure ({cis_map['permissions']})" + END)
         score += 1
     else:
         report.append(RED + "[FAIL] /etc/shadow permissions insecure" + END)
@@ -103,7 +120,7 @@ def check_fail2ban():
     result = run_command("systemctl is-active fail2ban")
 
     if "active" in result:
-        report.append(GREEN + "[PASS] Fail2Ban is active" + END)
+        report.append(GREEN + f"[PASS] Fail2Ban is active ({cis_map['fail2ban']})" + END)
         score += 1
     else:
         report.append(YELLOW + "[WARN] Fail2Ban not active" + END)
@@ -147,16 +164,25 @@ def check_updates():
         report.append(YELLOW + "[WARN] Updates available" + END)
         report.append(YELLOW + "  → Recommendation: Run 'sudo apt upgrade -y'" + END)
 
-check_firewall()
-check_ssh_root()
-check_ssh_password()
-check_shadow_permissions()
-check_services()
-check_rootkit()
-check_updates()
-check_open_ports()
-check_fail2ban()
-check_password_policy()
+# QUICK SCAN
+if args.quick:
+    check_firewall()
+    check_ssh_root()
+    check_ssh_password()
+    check_shadow_permissions()
+
+# FULL SCAN
+else:
+    check_firewall()
+    check_ssh_root()
+    check_ssh_password()
+    check_shadow_permissions()
+    check_services()
+    check_rootkit()
+    check_updates()
+    check_open_ports()
+    check_fail2ban()
+    check_password_policy()
 
 final_score = (score / max_score) * 100
 
@@ -179,8 +205,11 @@ audit_data = {
     "score": final_score
 }
 
-with open("audit_report.json", "w") as f:
-    json.dump(audit_data, f, indent=4)
+if args.export in ["json", "all"]:
+    with open("audit_report.json", "w") as f:
+        json.dump(audit_data, f, indent=4)
+
+    print("JSON report generated: audit_report.json")
 
 # ---------------- HTML EXPORT ----------------
 
@@ -216,8 +245,11 @@ html_content += f"""
 </html>
 """
 
-with open("audit_report.html", "w") as f:
-    f.write(html_content)
+if args.export in ["html", "all"]:
+    with open("audit_report.html", "w") as f:
+        f.write(html_content)
+
+    print("\nHTML report generated: audit_report.html")
 
 print("\nHTML report generated: audit_report.html")
 
